@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Project-specific: data & models
+data/raw/
+data/keypoints/
+models/*.pkl
+models/*.h5
+*.mp4
+*.avi
+*.mov
+
+# Weights & Biases
+wandb/
