@@ -187,7 +187,7 @@ def update_cat_and_alert(cat_id: str, session_id: str, score: int, risk: str) ->
 
 
 def mark_failed(ref, exc: Exception) -> None:
-    attempts = (ref.get().get("attempts") or 0) + 1
+    attempts = (ref.get().to_dict() or {}).get("attempts", 0) + 1
     if attempts >= 3:
         ref.update({"status": "rejected", "rejectReason": "We hit an error analysing this video. Please try again.",
                     "attempts": attempts, "lastError": str(exc)[:500]})
