@@ -15,7 +15,7 @@ export default function App() {
     <div className="mx-auto max-w-4xl px-4 pb-16">
       <header className="flex items-center justify-between py-5">
         <Link to="/" className="text-lg font-semibold">
-          FelineGait
+          PurrStride
         </Link>
         <div className="flex items-center gap-3 text-sm text-stone-600">
           <span className="hidden sm:inline">{user.email}</span>
@@ -33,7 +33,7 @@ export default function App() {
       </Routes>
 
       <footer className="mt-16 text-xs text-stone-400">
-        FelineGait is a screening aid, not a diagnosis. Always consult your vet.
+        PurrStride is a screening aid, not a diagnosis. Always consult your vet.
       </footer>
     </div>
   );
