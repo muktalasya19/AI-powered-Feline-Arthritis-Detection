@@ -181,7 +181,7 @@ def update_cat_and_alert(cat_id: str, session_id: str, score: int, risk: str) ->
         # FCM is free on the Spark plan.
         messaging.send_each_for_multicast(messaging.MulticastMessage(
             tokens=tokens,
-            notification=messaging.Notification(title="FelineGait", body=message),
+            notification=messaging.Notification(title="PurrStride", body=message),
             data={"catId": cat_id, "sessionId": session_id},
         ))
 
