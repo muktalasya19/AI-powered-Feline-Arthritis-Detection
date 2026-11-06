@@ -107,7 +107,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install "deeplabcut==3.0.0"
 cp .env.example .env        # fill in values, then:
 set -a && source .env && set +a
-python worker.py            # polls every 15 s; Ctrl+C to stop
+python worker.py            # polls every 5 s; Ctrl+C to stop
 ```
 
 CPU is fine for a pilot: a 20-second clip takes a few minutes. With Docker instead: `docker build -t felinegait-worker ml/worker && docker run --env-file ml/worker/.env -v $PWD/service-account.json:/app/service-account.json felinegait-worker`.
@@ -121,7 +121,7 @@ Add these GitHub repo secrets and every push to `main` deploys; every PR gets a 
 
 ## Free-tier limits to watch
 
-- **Firestore**: 50K reads/day. An idle worker polling every 15 s uses ~5.8K; raise `POLL_SECONDS` if you need headroom. If a quota is exceeded, Firebase stops that product until the quota resets.
+- **Firestore**: 50K reads/day. An idle worker polling every 5 s uses ~17K; raise `POLL_SECONDS` if you need headroom. If a quota is exceeded, Firebase stops that product until the quota resets.
 - **Bucket**: 10 GB ≈ 500–1,000 test videos. Delete raw videos after processing for users without research consent.
 - **Worker availability**: results only arrive while a worker is running. When you outgrow this, deploy the same worker to a paid always-on host — no app changes needed.
 

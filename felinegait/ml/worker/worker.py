@@ -26,13 +26,14 @@ from pathlib import Path
 
 import boto3
 import firebase_admin
+from botocore.config import Config
 from firebase_admin import firestore, messaging
 from google.cloud.firestore_v1 import FieldFilter, Transaction
 
 from pipeline import PipelineRejected, run_pipeline
 
 MODEL_VERSION = os.environ.get("MODEL_VERSION", "v0-heuristic")
-POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "15"))  # ~5.8k reads/day when idle; Spark allows 50k
+POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "5"))  # ~17k reads/day when idle; Spark allows 50k
 STALE_MINUTES = int(os.environ.get("STALE_MINUTES", "20"))  # requeue jobs a crashed worker left behind
 ALERT_DROP_POINTS = 10
 OUTPUT_FILES = ("overlay.mp4", "keypoints.json", "thumb.jpg")
@@ -43,14 +44,27 @@ log = logging.getLogger("gait-worker")
 
 firebase_admin.initialize_app()
 db = firestore.client()
+# R2/B2-safe client: path-style SigV4 requests, and no default checksums on
+# newer boto3 (>= 1.36), which R2 rejects with 400 Bad Request.
+try:
+    R2_CONFIG = Config(
+        signature_version="s3v4",
+        s3={"addressing_style": "path"},
+        request_checksum_calculation="when_required",
+        response_checksum_validation="when_required",
+    )
+except TypeError:  # older boto3 without these options doesn't send checksums anyway
+    R2_CONFIG = Config(signature_version="s3v4", s3={"addressing_style": "path"})
+
 s3 = boto3.client(
     "s3",
-    endpoint_url=os.environ["S3_ENDPOINT"],
-    region_name=os.environ.get("S3_REGION", "auto"),
-    aws_access_key_id=os.environ["S3_ACCESS_KEY_ID"],
-    aws_secret_access_key=os.environ["S3_SECRET_ACCESS_KEY"],
+    endpoint_url=os.environ["S3_ENDPOINT"].strip().rstrip("/"),
+    region_name=os.environ.get("S3_REGION", "auto").strip() or "auto",
+    aws_access_key_id=os.environ["S3_ACCESS_KEY_ID"].strip(),
+    aws_secret_access_key=os.environ["S3_SECRET_ACCESS_KEY"].strip(),
+    config=R2_CONFIG,
 )
-BUCKET = os.environ["S3_BUCKET"]
+BUCKET = os.environ["S3_BUCKET"].strip()
 
 
 # --------------------------------------------------------------------------- #
@@ -105,6 +119,7 @@ def process(ref) -> None:
     session_id = ref.id
     out_prefix = f"processed/{cat_id}/{session_id}"
     log.info("processing %s for cat %s", session_id, cat_id)
+    started = time.monotonic()
 
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
@@ -145,7 +160,7 @@ def process(ref) -> None:
     })
     batch.set(ref.collection("features").document("summary"), result.features)
     batch.commit()
-    log.info("done %s score=%s", session_id, result.score)
+    log.info("done %s score=%s in %.0fs", session_id, result.score, time.monotonic() - started)
 
     update_cat_and_alert(cat_id, session_id, result.score, result.risk_level)
 

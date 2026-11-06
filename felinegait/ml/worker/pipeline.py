@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +18,9 @@ import numpy as np
 from scipy.signal import find_peaks, savgol_filter
 
 MIN_STRIDES = 3
+MAX_SECONDS = float(os.environ.get("MAX_SECONDS", "15"))  # analyse at most this much video
+TARGET_SIZE = int(os.environ.get("TARGET_SIZE", "640"))  # longest side in px; plenty for gait keypoints
+TARGET_FPS = int(os.environ.get("TARGET_FPS", "30"))
 MIN_LIKELIHOOD = 0.6
 MODEL_PATH = os.environ.get("MODEL_PATH", "models/gbm_v0.joblib")
 
@@ -33,6 +38,33 @@ class GaitResult:
     risk_level: str
     features: dict
     quality: dict
+
+
+# --------------------------------------------------------------------------- #
+# 0. Shrink and trim (biggest speed-up: ~4-8x fewer pixels to track)
+# --------------------------------------------------------------------------- #
+def prepare_video(src: Path, workdir: Path) -> Path:
+    """Re-encode so the longest side is <= TARGET_SIZE px, at TARGET_FPS, <= MAX_SECONDS, no audio.
+
+    Falls back to the original file if ffmpeg is unavailable or fails.
+    """
+    if shutil.which("ffmpeg") is None:
+        return src
+    out = workdir / "prepared.mp4"
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error", "-i", str(src),
+        "-t", str(MAX_SECONDS),
+        "-vf",
+        f"scale=w='if(gte(iw,ih),min({TARGET_SIZE},iw),-2)':h='if(gte(iw,ih),-2,min({TARGET_SIZE},ih))',"
+        f"fps={TARGET_FPS}",
+        "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        str(out),
+    ]
+    try:
+        subprocess.run(cmd, check=True, timeout=120)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return src
+    return out if out.exists() and out.stat().st_size > 0 else src
 
 
 # --------------------------------------------------------------------------- #
@@ -210,6 +242,7 @@ def score(features: dict, n_strides: int, mean_likelihood: float) -> tuple[int, 
 # Orchestration
 # --------------------------------------------------------------------------- #
 def run_pipeline(video: Path, workdir: Path, on_stage: Callable[[str], None]) -> GaitResult:
+    video = prepare_video(video, workdir)
     quality = check_quality(video)
     on_stage("processing")
 
