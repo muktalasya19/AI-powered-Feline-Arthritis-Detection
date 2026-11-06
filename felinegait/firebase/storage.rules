@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Raw uploads: owner writes their own path only; video types; max 200 MB.
+    match /raw/{userId}/{catId}/{fileName} {
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 200 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
+
+    // Worker outputs and reports: served to clients via short-lived signed URLs
+    // minted by the edge API, so no direct client access.
+    match /processed/{allPaths=**} {
+      allow read, write: if false;
+    }
+    match /reports/{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

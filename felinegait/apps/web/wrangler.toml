@@ -1,0 +1,8 @@
+name = "felinegait"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
+
+[vars]
+FREE_PLAN_MONTHLY_TESTS = "2"
+PLUS_PLAN_MONTHLY_TESTS = "30"

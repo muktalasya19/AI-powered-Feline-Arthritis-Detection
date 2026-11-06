@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/RiskBadge.tsx","./src/hooks/useAuth.tsx","./src/hooks/useFirestore.ts","./src/lib/api.ts","./src/lib/firebase.ts","./src/lib/types.ts","./src/pages/CatDetail.tsx","./src/pages/Cats.tsx","./src/pages/NewTest.tsx","./src/pages/SignIn.tsx"],"errors":true,"version":"5.9.3"}

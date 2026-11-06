@@ -1,0 +1,102 @@
+rules_version = '2';
+
+// Access model: a cat is the unit of access. Whoever can read the cat can read
+// its sessions, features, questionnaires and events. Org roles live in custom
+// claims: request.auth.token.orgs = { "<orgId>": "owner" | "vet" | "staff" | "viewer" }.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function myOrgs() { return request.auth.token.get('orgs', {}); }
+    function orgRole(orgId) { return myOrgs().get(orgId, null); }
+    function catData(catId) { return get(/databases/$(database)/documents/cats/$(catId)).data; }
+    function isOwner(cat) { return cat.ownerUid == uid(); }
+    function inCatOrg(cat) { return cat.get('orgId', null) != null && orgRole(cat.orgId) != null; }
+    function sharedWithMyOrg(cat) { return cat.get('sharedWith', {}).keys().hasAny(myOrgs().keys()); }
+    function canReadCat(cat) { return signedIn() && (isOwner(cat) || inCatOrg(cat) || sharedWithMyOrg(cat)); }
+    // A vet is a member with role 'vet' in the cat's org, or in an org the cat is shared with.
+    // The 'isVet' claim is set server-side when someone holds a vet role in any org.
+    function isVetFor(cat) {
+      return signedIn() && request.auth.token.get('isVet', false) == true
+        && ((inCatOrg(cat) && orgRole(cat.orgId) == 'vet') || sharedWithMyOrg(cat));
+    }
+
+    // Users: each user reads and edits their own profile; plan is server-managed.
+    match /users/{userId} {
+      allow read: if signedIn() && uid() == userId;
+      allow update: if signedIn() && uid() == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'orgIds']);
+      allow create, delete: if false; // created by Auth trigger
+    }
+
+    // Organizations: members read; only server code writes.
+    match /orgs/{orgId} {
+      allow read: if signedIn() && orgRole(orgId) != null;
+      allow write: if false;
+      match /members/{memberId} {
+        allow read: if signedIn() && orgRole(orgId) != null;
+        allow write: if false;
+      }
+    }
+
+    match /cats/{catId} {
+      allow read: if canReadCat(resource.data);
+      allow create: if signedIn() && request.resource.data.ownerUid == uid()
+        && !('sharedWith' in request.resource.data);
+      allow update: if signedIn() && isOwner(resource.data)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['sharedWith', 'orgId']);
+      allow delete: if signedIn() && isOwner(resource.data);
+
+      // Sessions: created by the edge API (Admin SDK); clients only read.
+      match /sessions/{sessionId} {
+        allow read: if canReadCat(catData(catId));
+        allow write: if false;
+
+        match /features/{docId} {
+          allow read: if canReadCat(catData(catId));
+          allow write: if false;
+        }
+
+        match /annotations/{annotationId} {
+          allow read: if canReadCat(catData(catId));
+          allow create: if isVetFor(catData(catId)) && request.resource.data.authorUid == uid();
+          allow update, delete: if signedIn() && resource.data.authorUid == uid();
+        }
+      }
+
+      match /questionnaires/{qId} {
+        allow read: if canReadCat(catData(catId));
+        allow create, update: if signedIn() && isOwner(catData(catId));
+        allow delete: if false;
+      }
+
+      match /events/{eventId} {
+        allow read: if canReadCat(catData(catId));
+        allow write: if signedIn() && isOwner(catData(catId));
+      }
+    }
+
+    match /shareInvites/{token} {
+      allow read: if signedIn();
+      allow write: if false; // created and accepted via the edge API
+    }
+
+    match /models/{version} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /notifications/{userId}/items/{itemId} {
+      allow read: if signedIn() && uid() == userId;
+      allow update: if signedIn() && uid() == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create, delete: if false;
+    }
+
+    match /auditLog/{entryId} {
+      allow read, write: if false;
+    }
+  }
+}
