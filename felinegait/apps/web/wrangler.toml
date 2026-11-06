@@ -4,5 +4,18 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "./dist"
 
 [vars]
+# wrangler.toml is the source of truth for Pages vars; dashboard vars are ignored when it exists.
+FIREBASE_PROJECT_ID = "your-firebase-project-id"
 FREE_PLAN_MONTHLY_TESTS = "2"
 PLUS_PLAN_MONTHLY_TESTS = "30"
+MAX_UPLOAD_MB = "200"
+
+# S3-compatible bucket (free tiers: Cloudflare R2 10 GB, Backblaze B2 10 GB).
+# R2:  S3_ENDPOINT = "https://<account-id>.r2.cloudflarestorage.com", S3_REGION = "auto"
+# B2:  S3_ENDPOINT = "https://s3.<region>.backblazeb2.com",           S3_REGION = "<region>"
+S3_ENDPOINT = "https://<account-id>.r2.cloudflarestorage.com"
+S3_REGION = "auto"
+S3_BUCKET = "felinegait-media"
+
+# Secrets (set with `npx wrangler pages secret put <NAME> --project-name felinegait`):
+#   FIREBASE_SERVICE_ACCOUNT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY

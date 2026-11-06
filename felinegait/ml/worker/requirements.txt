@@ -1,13 +1,13 @@
-fastapi==0.115.4
-uvicorn[standard]==0.32.0
-google-cloud-firestore==2.19.0
-google-cloud-storage==2.18.2
+firebase-admin==6.6.0
+boto3==1.35.54
 numpy>=1.26,<2.0
 scipy==1.14.1
 pandas==2.2.3
+tables==3.10.1
 scikit-learn==1.5.2
 joblib==1.4.2
 opencv-python-headless==4.10.0.84
-# Pose estimation — pinned in the Dockerfile with the CUDA base image
-# deeplabcut[tf]==3.0.0
-# torch==2.4.1
+# Pose estimation. Install separately so you can pick the right PyTorch build:
+#   CPU:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   GPU:  Colab/Kaggle already ship a CUDA build of torch
+#   then: pip install "deeplabcut==3.0.0"

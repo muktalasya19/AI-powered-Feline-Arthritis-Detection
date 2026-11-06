@@ -22,12 +22,17 @@ service cloud.firestore {
         && ((inCatOrg(cat) && orgRole(cat.orgId) == 'vet') || sharedWithMyOrg(cat));
     }
 
-    // Users: each user reads and edits their own profile; plan is server-managed.
+    // Users: each user reads and edits their own profile; plan and orgs are server-managed.
+    // The app creates the profile on first sign-in (no Cloud Functions on the free plan),
+    // so creation is allowed only with the default free plan and no orgs.
     match /users/{userId} {
       allow read: if signedIn() && uid() == userId;
+      allow create: if signedIn() && uid() == userId
+        && request.resource.data.plan == 'free'
+        && request.resource.data.orgIds.size() == 0;
       allow update: if signedIn() && uid() == userId
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan', 'orgIds']);
-      allow create, delete: if false; // created by Auth trigger
+      allow delete: if false;
     }
 
     // Organizations: members read; only server code writes.

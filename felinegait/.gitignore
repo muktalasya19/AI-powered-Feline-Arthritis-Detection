@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+firebase/functions/lib/
+.wrangler/
+
+# Env and secrets
+.env
+.env.local
+.env.*.local
+.dev.vars
+serviceAccount*.json
+service-account*.json
+*-sa.json
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# ML artifacts (keep out of git; store in GCS / MLflow)
+*.h5
+*.pt
+*.pth
+*.pickle
+*.mp4
+*.mov
+data/
+models/
+mlruns/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+.ruff_cache/
+*.tsbuildinfo

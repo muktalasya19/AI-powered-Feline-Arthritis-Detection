@@ -2,45 +2,47 @@
 
 Full write-up with diagrams: https://claude.ai/artifact/8ehanSYmxaQxE1gey8W9F2
 
-## Layers
+## Layers (free stack)
 
 ```
 Clients (Owner PWA · Vet portal · Shelter console · Admin)
-   │  load app, call API                    │ Firebase SDK: sign-in, live status, uploads
+   │ load app, call API                     │ Firebase SDK: sign-in, live status
    ▼                                        │
-Cloudflare edge                             │
-   Pages (React SPA) · Pages Functions API · Turnstile + WAF
-   │  Admin writes (Firestore REST)         │
-   ▼                                        ▼
-Firebase: Auth · Firestore · Cloud Storage · Cloud Functions + FCM
-   │  upload event (Pub/Sub)        ▲ scores, features, overlays written back
-   ▼                                │
-Google Cloud: Pub/Sub → Cloud Run GPU worker → Model registry
+Cloudflare Pages + Pages Functions          │
+   │ presigned PUT/GET   │ Firestore REST   │
+   ▼                     ▼                  ▼
+R2 / B2 bucket      Firebase Spark: Auth · Firestore · FCM
+   ▲                     ▲
+   │ download video,     │ poll `queued`, claim, write results
+   │ upload outputs      │
+   └──── Polling worker (your PC · Colab · Kaggle) ────┘
 ```
 
 ## Session status machine
 
-`uploaded` (edge API) → `checking` (Storage trigger) → `processing` (worker) → `done` | `rejected`
+`pending_upload` (edge API) → `queued` (edge API, after upload confirmed) → `checking` (worker claims) → `processing` → `done` | `rejected`
+
+A worker that crashes mid-job leaves a session in `checking`/`processing`; any worker requeues it after 20 minutes. Failed jobs retry up to 3 times.
 
 ## Firestore
 
 | Path | Written by |
 | --- | --- |
-| `users/{uid}` | Auth trigger; user edits name/prefs |
+| `users/{uid}` | App on first sign-in (free plan only); user edits name/prefs |
 | `orgs/{orgId}`, `orgs/{orgId}/members/{uid}` | Server only |
 | `cats/{catId}` | Owner (except `sharedWith`, `orgId`, `latest*`) |
-| `cats/{catId}/sessions/{sessionId}` | Edge API creates; worker and functions update |
+| `cats/{catId}/sessions/{sessionId}` | Edge API creates and queues; worker updates |
 | `.../sessions/{id}/features/summary` | Worker |
 | `.../sessions/{id}/annotations/{id}` | Vets |
 | `cats/{catId}/questionnaires`, `events` | Owner |
 | `shareInvites/{token}` | Edge API |
 | `models/{version}` | Admin / training jobs |
-| `notifications/{uid}/items` | Functions |
+| `notifications/{uid}/items` | Worker |
 | `auditLog` | Server only |
 
-## Storage
+## Bucket (R2 or B2)
 
-- `raw/{uid}/{catId}/{sessionId}.mp4` — client upload, ≤ 200 MB, video only
+- `raw/{uid}/{catId}/{sessionId}.{mp4|webm|mov}` — browser upload via presigned PUT, ≤ 200 MB
 - `processed/{catId}/{sessionId}/` — `overlay.mp4`, `keypoints.json`, `thumb.jpg`
 - `reports/{catId}/{sessionId}.pdf`
 

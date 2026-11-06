@@ -1,0 +1,81 @@
+name: FelineGait CI / Deploy
+
+on:
+  push:
+    branches: [main]
+    paths: ["felinegait/**", ".github/workflows/felinegait-ci.yml"]
+  pull_request:
+    paths: ["felinegait/**", ".github/workflows/felinegait-ci.yml"]
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    defaults:
+      run:
+        working-directory: felinegait
+    env:
+      HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: felinegait/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build -w apps/web
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+      # Deploys a preview for PRs and production for main.
+      - name: Deploy to Cloudflare Pages
+        if: env.HAS_CF_TOKEN == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: felinegait/apps/web
+          command: pages deploy dist --project-name felinegait --branch ${{ github.head_ref || github.ref_name }}
+
+  firebase:
+    if: github.ref == 'refs/heads/main'
+    needs: web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: felinegait
+    env:
+      HAS_FB_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Rules and indexes deploy fine on the free Spark plan.
+      - name: Deploy Firestore rules and indexes
+        if: env.HAS_FB_SA == 'true'
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx --yes firebase-tools deploy --only firestore --non-interactive --project "${{ secrets.VITE_FIREBASE_PROJECT_ID }}"
+          rm "$RUNNER_TEMP/sa.json"
+
+  ml:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: felinegait/ml/worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check .

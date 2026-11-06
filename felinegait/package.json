@@ -3,15 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": [
-    "apps/web",
-    "firebase/functions"
+    "apps/web"
   ],
   "scripts": {
     "dev": "npm run dev -w apps/web",
     "dev:pages": "npm run dev:pages -w apps/web",
-    "build": "npm run build -w apps/web && npm run build -w firebase/functions",
+    "build": "npm run build -w apps/web",
     "lint": "npm run lint -w apps/web",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck -w apps/web"
   },
   "engines": {
     "node": ">=20"

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { doc } from "firebase/firestore";
-import { ref, uploadBytesResumable } from "firebase/storage";
-import { db, storage } from "../lib/firebase";
+import { db } from "../lib/firebase";
 import { api } from "../lib/api";
 import { useDoc } from "../hooks/useFirestore";
 import RiskBadge from "../components/RiskBadge";
@@ -84,14 +83,14 @@ export default function NewTest() {
   async function upload() {
     if (!clip) return;
     setError(null);
+    setProgress(0);
     setPhase("uploading");
     try {
-      const slot = await api<{ sessionId: string; uploadPath: string }>("/upload-slot", { catId });
-      const task = uploadBytesResumable(ref(storage, slot.uploadPath), clip, {
-        contentType: clip.type || "video/mp4",
-      });
-      task.on("state_changed", (s) => setProgress(Math.round((s.bytesTransferred / s.totalBytes) * 100)));
-      await task;
+      const contentType = (clip.type || "video/mp4").split(";")[0];
+      const slot = await api<{ sessionId: string; uploadUrl: string }>("/upload-slot", { catId, contentType });
+      // Straight to the bucket with a presigned URL; the API never handles the video bytes.
+      await putWithProgress(slot.uploadUrl, clip, contentType, setProgress);
+      await api(`/sessions/${catId}/${slot.sessionId}/complete`, {});
       setSessionId(slot.sessionId);
       setPhase("tracking");
     } catch (e) {
@@ -168,6 +167,11 @@ export default function NewTest() {
           {session.status !== "done" && session.status !== "rejected" && (
             <ProgressBar label="" value={STAGE_PROGRESS[session.status]} />
           )}
+          {session.status === "queued" && (
+            <p className="text-xs text-stone-500">
+              Your video is saved. The result appears here as soon as the analyser picks it up — you can leave this page.
+            </p>
+          )}
           {session.status === "rejected" && (
             <p className="text-sm">
               {session.rejectReason ?? "We couldn't see enough strides."} Try again with the tips above.
@@ -193,7 +197,20 @@ export default function NewTest() {
   );
 }
 
-const STAGE_PROGRESS: Record<string, number> = { uploaded: 10, checking: 30, processing: 65 };
+const STAGE_PROGRESS: Record<string, number> = { pending_upload: 5, queued: 15, checking: 30, processing: 65 };
+
+/** PUT a file to a presigned URL, reporting progress (fetch has no upload progress events). */
+function putWithProgress(url: string, body: Blob, contentType: string, onProgress: (pct: number) => void) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("content-type", contentType);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
+    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`)));
+    xhr.onerror = () => reject(new Error("Upload failed — check your connection and try again."));
+    xhr.send(body);
+  });
+}
 
 function ProgressBar({ label, value }: { label: string; value: number }) {
   return (

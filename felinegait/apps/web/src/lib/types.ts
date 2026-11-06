@@ -1,7 +1,7 @@
 import type { Timestamp } from "firebase/firestore";
 
 export type RiskLevel = "low" | "watch" | "see_vet";
-export type SessionStatus = "uploaded" | "checking" | "processing" | "done" | "rejected";
+export type SessionStatus = "pending_upload" | "queued" | "checking" | "processing" | "done" | "rejected";
 
 export interface Cat {
   id: string;
@@ -43,7 +43,8 @@ export const RISK_LABEL: Record<RiskLevel, string> = {
 };
 
 export const STATUS_LABEL: Record<SessionStatus, string> = {
-  uploaded: "Uploaded",
+  pending_upload: "Uploading",
+  queued: "Waiting for the analyser",
   checking: "Checking video quality",
   processing: "Analysing gait",
   done: "Done",

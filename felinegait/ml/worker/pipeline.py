@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import cv2
 import numpy as np
@@ -200,7 +200,7 @@ def score(features: dict, n_strides: int, mean_likelihood: float) -> tuple[int, 
         # Heuristic fallback until v0 is trained: lower symmetry/smoothness → higher risk
         p_arthritis = float(np.clip(1 - (0.6 * features["strideSymmetry"] + 0.4 * features["smoothness"]), 0, 1))
 
-    mobility = int(round(100 * (1 - p_arthritis)))
+    mobility = round(100 * (1 - p_arthritis))
     confidence = float(np.clip(0.4 + 0.1 * n_strides, 0, 1) * mean_likelihood)
     risk = "low" if mobility >= 70 else "watch" if mobility >= 40 else "see_vet"
     return mobility, round(confidence, 2), risk
